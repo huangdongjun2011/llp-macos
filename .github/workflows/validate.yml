@@ -12,7 +12,7 @@ on:
         required: false
         type: string
       build_number:
-        description: "Optional build number for compatibility with entry.yml"
+        description: "Optional build number for compatibility with workflows/entry.yml"
         required: false
         type: string
 

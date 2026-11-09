@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Extracted from .github/entry.yml
+# Extracted from .github/workflows/entry.yml
 set -eu
 
 case "$TASK" in
