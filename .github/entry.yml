@@ -1,0 +1,86 @@
+
+name: Release Task Entry
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Task to execute"
+        required: true
+        type: choice
+        options:
+          - validate
+          - build
+          - test
+          - sign
+          - notarize
+          - package
+          - tag
+          - release
+          - verify-release
+
+      commit_sha:
+        description: "Source commit SHA"
+        required: false
+        type: string
+
+      version:
+        description: "Application version"
+        required: false
+        type: string
+
+      build_number:
+        description: "Optional build number (not required for validation)"
+        required: false
+        type: string
+
+      build_run_id:
+        description: "Build Workflow Run ID required for sign"
+        required: false
+        type: string
+
+      package_run_id:
+        description: "Package Workflow Run ID required for release"
+        required: false
+        type: string
+
+      sign_run_id:
+        description: "Sign Workflow Run ID required for notarize"
+        required: false
+        type: string
+
+      notarize_run_id:
+        description: "Notarize Workflow Run ID required for package"
+        required: false
+        type: string
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    name: Dispatch selected task
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: .workflow-scripts
+          persist-credentials: false
+      - name: Trigger task workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TASK: ${{ inputs.task }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+          VERSION: ${{ inputs.version }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+          PACKAGE_RUN_ID: ${{ inputs.package_run_id }}
+          SIGN_RUN_ID: ${{ inputs.sign_run_id }}
+          NOTARIZE_RUN_ID: ${{ inputs.notarize_run_id }}
+          REF: ${{ github.ref_name }}
+        run: bash .workflow-scripts/.github/scripts/entry/trigger-task-workflow.sh

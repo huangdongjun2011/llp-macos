@@ -1,0 +1,92 @@
+name: Sign LLP macOS app
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: "Successful Build Workflow run ID containing the LLP .xcarchive artifact"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  sign:
+    name: Sign Developer ID archive
+    runs-on: macos-15
+    env:
+      BUILD_RUN_ID: ${{ inputs.build_run_id }}
+      TEMP_KEYCHAIN: ${{ runner.temp }}/llp-signing-${{ github.run_id }}.keychain-db
+      CERTIFICATE_FILE: ${{ runner.temp }}/developer-id-${{ github.run_id }}.p12
+      ENTITLEMENTS_FILE: ${{ runner.temp }}/llp-entitlements-${{ github.run_id }}.plist
+      ARTIFACT_DIR: ${{ runner.temp }}/signed-artifact
+    steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: .workflow-scripts
+          persist-credentials: false
+      - name: Validate signing secrets and Build Run ID
+        id: preflight
+        shell: bash
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          SIGNING_IDENTITY: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION_IDENTITY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_SIGNING_KEYCHAIN_PASSWORD }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash .workflow-scripts/.github/scripts/sign/validate-signing-secrets-and-build-run-id.sh
+      - name: Download source build artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.build_run_id }}
+          pattern: llp-macos-*
+          path: ${{ runner.temp }}/build-artifacts
+          merge-multiple: true
+
+      - name: Verify build artifact provenance and archive
+        id: source
+        shell: bash
+        env:
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+        run: bash .workflow-scripts/.github/scripts/sign/verify-build-artifact-provenance-and-archive.sh
+      - name: Create temporary keychain and import Developer ID certificate
+        id: keychain
+        shell: bash
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          SIGNING_IDENTITY: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION_IDENTITY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_SIGNING_KEYCHAIN_PASSWORD }}
+        run: bash .workflow-scripts/.github/scripts/sign/create-temporary-keychain-and-import-developer-id-certificate.sh
+      - name: Sign and verify app
+        shell: bash
+        env:
+          SIGNING_IDENTITY: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION_IDENTITY }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ENTITLEMENTS_BASE64: ${{ secrets.APPLE_SIGNING_ENTITLEMENTS_BASE64 }}
+          ARCHIVE_PATH: ${{ steps.source.outputs.archive }}
+          APP_PATH: ${{ steps.source.outputs.app }}
+          COMMIT_SHA: ${{ steps.source.outputs.commit_sha }}
+          VERSION: ${{ steps.source.outputs.version }}
+          BUILD_NUMBER: ${{ steps.source.outputs.build_number }}
+          BUILD_ARTIFACT: ${{ steps.source.outputs.artifact_name }}
+        run: bash .workflow-scripts/.github/scripts/sign/sign-and-verify-app.sh
+      - name: Upload signed artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llp-signed-${{ steps.source.outputs.version }}-${{ steps.source.outputs.build_number }}
+          path: ${{ runner.temp }}/signed-artifact/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Clean temporary signing credentials
+        if: always()
+        shell: bash
+        run: bash .workflow-scripts/.github/scripts/sign/clean-temporary-signing-credentials.sh

@@ -1,0 +1,77 @@
+name: Package LLP macOS installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      notarize_run_id:
+        description: "Successful Notarize Workflow Run ID containing the stapled LLP.app artifact"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  package:
+    name: Verify and package notarized app
+    runs-on: macos-15
+    env:
+      NOTARIZE_RUN_ID: ${{ inputs.notarize_run_id }}
+      INPUT_DIR: ${{ runner.temp }}/llp-notarized-input
+      OUTPUT_DIR: ${{ runner.temp }}/llp-package-output
+    steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: .workflow-scripts
+          persist-credentials: false
+      - name: Validate Run ID
+        shell: bash
+        run: bash .workflow-scripts/.github/scripts/package/validate-run-id.sh
+      - name: Download notarized app artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.notarize_run_id }}
+          pattern: llp-notarized-*
+          path: ${{ runner.temp }}/llp-notarized-input
+          merge-multiple: true
+
+      - name: Verify provenance, signature, and notarization
+        id: verify
+        shell: bash
+        env:
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+        run: bash .workflow-scripts/.github/scripts/package/verify-provenance-signature-and-notarization.sh
+      - name: Create ZIP and checksum
+        id: package
+        shell: bash
+        env:
+          APP_PATH: ${{ steps.verify.outputs.app }}
+          COMMIT_SHA: ${{ steps.verify.outputs.commit_sha }}
+          VERSION: ${{ steps.verify.outputs.version }}
+          BUILD_NUMBER: ${{ steps.verify.outputs.build_number }}
+          BUILD_RUN_ID: ${{ steps.verify.outputs.build_run_id }}
+          SIGN_RUN_ID: ${{ steps.verify.outputs.sign_run_id }}
+        run: bash .workflow-scripts/.github/scripts/package/create-zip-and-checksum.sh
+      - name: Upload Package Workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: llp-package-${{ steps.verify.outputs.version }}-${{ steps.verify.outputs.build_number }}
+          path: ${{ runner.temp }}/llp-package-output/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Package summary
+        if: success()
+        env:
+          PACKAGE_NAME: ${{ steps.package.outputs.package_name }}
+          PACKAGE_SHA: ${{ steps.package.outputs.package_sha }}
+          COMMIT_SHA: ${{ steps.verify.outputs.commit_sha }}
+          VERSION: ${{ steps.verify.outputs.version }}
+          BUILD_NUMBER: ${{ steps.verify.outputs.build_number }}
+        shell: bash
+        run: bash .workflow-scripts/.github/scripts/package/package-summary.sh

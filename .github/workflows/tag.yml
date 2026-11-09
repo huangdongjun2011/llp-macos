@@ -1,0 +1,68 @@
+name: Tag LLP release commit
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_run_id:
+        description: "Successful Package Workflow Run ID whose verified metadata selects the commit and version"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: github-release-tags
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Verify package and create annotated tag
+    runs-on: ubuntu-latest
+    env:
+      PACKAGE_RUN_ID: ${{ inputs.package_run_id }}
+      PACKAGE_DIR: ${{ runner.temp }}/llp-tag-package
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: .workflow-scripts
+          persist-credentials: false
+      - name: Validate Package Run ID
+        shell: bash
+        run: bash .workflow-scripts/.github/scripts/tag/validate-package-run-id.sh
+      - name: Download Package artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.package_run_id }}
+          pattern: llp-package-*
+          path: ${{ runner.temp }}/llp-tag-package
+          merge-multiple: true
+
+      - name: Validate package metadata and installer checksum
+        id: package
+        shell: bash
+        env:
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+        run: bash .workflow-scripts/.github/scripts/tag/validate-package-metadata-and-installer-checksum.sh
+      - name: Confirm commit exists and create or verify annotated tag
+        id: create_tag
+        shell: bash
+        env:
+          COMMIT_SHA: ${{ steps.package.outputs.commit_sha }}
+          VERSION: ${{ steps.package.outputs.version }}
+        run: bash .workflow-scripts/.github/scripts/tag/confirm-commit-exists-and-create-or-verify-annotated-tag.sh
+      - name: Tag summary
+        if: success()
+        env:
+          TAG_NAME: ${{ steps.create_tag.outputs.tag_name }}
+          COMMIT_SHA: ${{ steps.create_tag.outputs.commit_sha }}
+          VERSION: ${{ steps.package.outputs.version }}
+        shell: bash
+        run: bash .workflow-scripts/.github/scripts/tag/tag-summary.sh

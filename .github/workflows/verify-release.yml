@@ -1,0 +1,63 @@
+name: Verify LLP GitHub Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_run_id:
+        description: "Package Workflow Run ID containing the expected installer metadata"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  verify:
+    name: Verify published Release assets
+    runs-on: macos-15
+    env:
+      PACKAGE_RUN_ID: ${{ inputs.package_run_id }}
+      PACKAGE_DIR: ${{ runner.temp }}/llp-verify-package
+      RELEASE_DIR: ${{ runner.temp }}/llp-release-assets
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: .workflow-scripts
+          persist-credentials: false
+      - name: Validate input
+        shell: bash
+        run: bash .workflow-scripts/.github/scripts/verify-release/validate-input.sh
+      - name: Download expected Package artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.package_run_id }}
+          pattern: llp-package-*
+          path: ${{ runner.temp }}/llp-verify-package
+          merge-multiple: true
+
+      - name: Verify release and published installer
+        id: verify
+        shell: bash
+        env:
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+        run: bash .workflow-scripts/.github/scripts/verify-release/verify-release-and-published-installer.sh
+      - name: Complete verification report
+        if: always()
+        shell: bash
+        env:
+          RELEASE_URL: ${{ steps.verify.outputs.release_url }}
+          RELEASE_TAG: ${{ steps.verify.outputs.release_tag }}
+          COMMIT_SHA: ${{ steps.verify.outputs.commit_sha }}
+          VERSION: ${{ steps.verify.outputs.version }}
+          BUILD_NUMBER: ${{ steps.verify.outputs.build_number }}
+          PACKAGE_SHA: ${{ steps.verify.outputs.package_sha256 }}
+          RELEASE_DRAFT: ${{ steps.verify.outputs.draft }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: bash .workflow-scripts/.github/scripts/verify-release/complete-verification-report.sh

@@ -1,0 +1,97 @@
+name: Notarize LLP macOS app
+
+on:
+  workflow_dispatch:
+    inputs:
+      sign_run_id:
+        description: "Successful Sign Workflow Run ID containing the signed LLP app artifact"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  notarize:
+    name: Notarize and staple signed app
+    runs-on: macos-15
+    env:
+      SIGN_RUN_ID: ${{ inputs.sign_run_id }}
+      WORK_DIR: ${{ runner.temp }}/llp-notarize-${{ github.run_id }}
+      API_KEY_FILE: ${{ runner.temp }}/appstore-connect-key-${{ github.run_id }}.p8
+      ARTIFACT_DIR: ${{ runner.temp }}/notarized-artifact
+    steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: .workflow-scripts
+          persist-credentials: false
+      - name: Validate input and App Store Connect credentials
+        shell: bash
+        env:
+          API_KEY_BASE64: ${{ secrets.APPLE_NOTARY_API_KEY_BASE64 }}
+          API_KEY_ID: ${{ secrets.APPLE_NOTARY_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APPLE_NOTARY_API_ISSUER_ID }}
+        run: bash .workflow-scripts/.github/scripts/notarize/validate-input-and-app-store-connect-credentials.sh
+      - name: Download signed app artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.sign_run_id }}
+          pattern: llp-signed-*
+          path: ${{ runner.temp }}/signed-artifacts
+          merge-multiple: true
+
+      - name: Verify signed artifact provenance and app signature
+        id: source
+        shell: bash
+        env:
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+          API_KEY_BASE64: ${{ secrets.APPLE_NOTARY_API_KEY_BASE64 }}
+        run: bash .workflow-scripts/.github/scripts/notarize/verify-signed-artifact-provenance-and-app-signature.sh
+      - name: Submit app for notarization
+        id: submit
+        shell: bash
+        env:
+          API_KEY_ID: ${{ secrets.APPLE_NOTARY_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APPLE_NOTARY_API_ISSUER_ID }}
+          APP_PATH: ${{ steps.source.outputs.app }}
+        run: bash .workflow-scripts/.github/scripts/notarize/submit-app-for-notarization.sh
+      - name: Staple ticket and create notarized app artifact
+        id: staple
+        shell: bash
+        env:
+          APP_PATH: ${{ steps.source.outputs.app }}
+          SOURCE_BUILD_RUN_ID: ${{ steps.source.outputs.source_build_run_id }}
+          COMMIT_SHA: ${{ steps.source.outputs.commit_sha }}
+          VERSION: ${{ steps.source.outputs.version }}
+          BUILD_NUMBER: ${{ steps.source.outputs.build_number }}
+          IDENTITY: ${{ steps.source.outputs.identity }}
+          TEAM_ID: ${{ steps.source.outputs.team_id }}
+          SUBMISSION_ID: ${{ steps.submit.outputs.submission_id }}
+        run: bash .workflow-scripts/.github/scripts/notarize/staple-ticket-and-create-notarized-app-artifact.sh
+      - name: Upload notarized app artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llp-notarized-${{ steps.source.outputs.version }}-${{ steps.source.outputs.build_number }}
+          path: ${{ runner.temp }}/notarized-artifact/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Apple notarization diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llp-notary-log-${{ github.run_id }}
+          path: ${{ runner.temp }}/llp-notarize-${{ github.run_id }}/notary-log.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Clean temporary notarization credentials
+        if: always()
+        shell: bash
+        run: bash .workflow-scripts/.github/scripts/notarize/clean-temporary-notarization-credentials.sh

@@ -1,0 +1,73 @@
+name: Create LLP GitHub Draft Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_run_id:
+        description: "Successful Package Workflow Run ID containing the installer artifact"
+        required: true
+        type: string
+      version:
+        description: "Release version; must match package metadata and an existing v-prefixed tag"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: github-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Verify package and create draft release
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PACKAGE_RUN_ID: ${{ inputs.package_run_id }}
+      VERSION: ${{ inputs.version }}
+      GH_TAG: v${{ inputs.version }}
+      PACKAGE_ROOT: ${{ runner.temp }}/llp-package
+    steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: .workflow-scripts
+          persist-credentials: false
+      - name: Validate inputs
+        shell: bash
+        run: bash .workflow-scripts/.github/scripts/release/validate-inputs.sh
+      - name: Download Package Workflow artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.package_run_id }}
+          pattern: llp-package-*
+          path: ${{ runner.temp }}/llp-package
+          merge-multiple: true
+
+      - name: Verify package provenance, SHA-256, signature, notarization, and tag
+        id: verify
+        shell: bash
+        run: bash .workflow-scripts/.github/scripts/release/verify-package-provenance-sha-256-signature-notarization-and-tag.sh
+      - name: Create or safely resume Draft Release
+        id: publish
+        shell: bash
+        env:
+          COMMIT_SHA: ${{ steps.verify.outputs.commit_sha }}
+          PACKAGE_FILE: ${{ steps.verify.outputs.package_path }}
+          PACKAGE_SHA: ${{ steps.verify.outputs.sha256 }}
+        run: bash .workflow-scripts/.github/scripts/release/create-or-safely-resume-draft-release.sh
+      - name: Publish summary
+        if: success()
+        env:
+          RELEASE_URL: ${{ steps.publish.outputs.release_url }}
+          COMMIT_SHA: ${{ steps.verify.outputs.commit_sha }}
+          PACKAGE_FILE: ${{ steps.verify.outputs.package_path }}
+        shell: bash
+        run: bash .workflow-scripts/.github/scripts/release/publish-summary.sh

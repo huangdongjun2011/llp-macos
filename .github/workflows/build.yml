@@ -1,0 +1,68 @@
+name: Build LLP macOS app
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: "Full source commit SHA (defaults to the selected workflow ref)"
+        required: false
+        type: string
+      version:
+        description: "Application/API version (defaults to the checked-out mac/api-version)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Release artifact
+    runs-on: macos-15
+    steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: .workflow-scripts
+          persist-credentials: false
+      - name: Resolve source commit
+        id: source
+        shell: bash
+        env:
+          INPUT_SHA: ${{ inputs.commit_sha }}
+        run: bash .workflow-scripts/.github/scripts/build/resolve-source-commit.sh
+      - name: Checkout requested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+          persist-credentials: false
+
+      - name: Resolve version and build number
+        id: metadata
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: bash .workflow-scripts/.github/scripts/build/resolve-version-and-build-number.sh
+      - name: Build Release configuration
+        shell: bash
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+          BUILD_NUMBER: ${{ steps.metadata.outputs.build_number }}
+        run: bash .workflow-scripts/.github/scripts/build/build-release-configuration.sh
+      - name: Save build metadata
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.metadata.outputs.sha }}
+          VERSION: ${{ steps.metadata.outputs.version }}
+          BUILD_NUMBER: ${{ steps.metadata.outputs.build_number }}
+          ARTIFACT_NAME: ${{ steps.metadata.outputs.artifact_name }}
+        run: bash .workflow-scripts/.github/scripts/build/save-build-metadata.sh
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.metadata.outputs.artifact_name }}
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,48 @@
+name: Validate release inputs and Xcode project
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: "Source commit SHA (defaults to the selected workflow ref)"
+        required: false
+        type: string
+      version:
+        description: "Application/API version (defaults to mac/api-version)"
+        required: false
+        type: string
+      build_number:
+        description: "Optional build number for compatibility with entry.yml"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate source, version, and Xcode project
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: .workflow-scripts
+          persist-credentials: false
+      - name: Resolve and validate source commit
+        id: source
+        shell: bash
+        env:
+          INPUT_SHA: ${{ inputs.commit_sha }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_BUILD_NUMBER: ${{ inputs.build_number }}
+          DISPATCH_REF: ${{ github.ref }}
+          REPOSITORY: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+        run: bash .workflow-scripts/.github/scripts/validate/resolve-and-validate-source-commit.sh
+      - name: Validate Xcode project structure and release scheme
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: bash .workflow-scripts/.github/scripts/validate/validate-xcode-project-structure-and-release-scheme.sh
