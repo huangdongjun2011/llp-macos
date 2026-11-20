@@ -3,8 +3,8 @@ name: Sign LLP macOS app
 on:
   workflow_dispatch:
     inputs:
-      build_run_id:
-        description: "Successful Build Workflow run ID containing the LLP .xcarchive artifact"
+      context:
+        description: "JSON context for this release task"
         required: true
         type: string
 
@@ -17,7 +17,6 @@ jobs:
     name: Sign Developer ID archive
     runs-on: macos-15
     env:
-      BUILD_RUN_ID: ${{ inputs.build_run_id }}
       TEMP_KEYCHAIN: ${{ runner.temp }}/llp-signing-${{ github.run_id }}.keychain-db
       CERTIFICATE_FILE: ${{ runner.temp }}/developer-id-${{ github.run_id }}.p12
       ENTITLEMENTS_FILE: ${{ runner.temp }}/llp-entitlements-${{ github.run_id }}.plist
@@ -29,6 +28,13 @@ jobs:
           ref: ${{ github.sha }}
           path: .workflow-scripts
           persist-credentials: false
+
+      - name: Parse workflow context
+        id: context
+        shell: bash
+        env:
+          CONTEXT: ${{ inputs.context }}
+        run: bash .workflow-scripts/.github/scripts/common/parse-context.sh required:build_run_id
       - name: Validate signing secrets and Build Run ID
         id: preflight
         shell: bash
@@ -44,7 +50,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
-          run-id: ${{ inputs.build_run_id }}
+          run-id: ${{ steps.context.outputs.build_run_id }}
           pattern: llp-macos-*
           path: ${{ runner.temp }}/build-artifacts
           merge-multiple: true

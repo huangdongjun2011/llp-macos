@@ -3,8 +3,8 @@ name: Tag LLP release commit
 on:
   workflow_dispatch:
     inputs:
-      package_run_id:
-        description: "Successful Package Workflow Run ID whose verified metadata selects the commit and version"
+      context:
+        description: "JSON context for this release task"
         required: true
         type: string
 
@@ -21,7 +21,6 @@ jobs:
     name: Verify package and create annotated tag
     runs-on: ubuntu-latest
     env:
-      PACKAGE_RUN_ID: ${{ inputs.package_run_id }}
       PACKAGE_DIR: ${{ runner.temp }}/llp-tag-package
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
@@ -32,6 +31,13 @@ jobs:
           ref: ${{ github.sha }}
           path: .workflow-scripts
           persist-credentials: false
+
+      - name: Parse workflow context
+        id: context
+        shell: bash
+        env:
+          CONTEXT: ${{ inputs.context }}
+        run: bash .workflow-scripts/.github/scripts/common/parse-context.sh required:package_run_id
       - name: Validate Package Run ID
         shell: bash
         run: bash .workflow-scripts/.github/scripts/tag/validate-package-run-id.sh
@@ -40,7 +46,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
-          run-id: ${{ inputs.package_run_id }}
+          run-id: ${{ steps.context.outputs.package_run_id }}
           pattern: llp-package-*
           path: ${{ runner.temp }}/llp-tag-package
           merge-multiple: true

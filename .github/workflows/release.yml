@@ -3,12 +3,8 @@ name: Create LLP GitHub Draft Release
 on:
   workflow_dispatch:
     inputs:
-      package_run_id:
-        description: "Successful Package Workflow Run ID containing the installer artifact"
-        required: true
-        type: string
-      version:
-        description: "Release version; must match package metadata and an existing v-prefixed tag"
+      context:
+        description: "JSON context for this release task"
         required: true
         type: string
 
@@ -17,7 +13,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: github-release-${{ inputs.version }}
+  group: github-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -27,9 +23,6 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      PACKAGE_RUN_ID: ${{ inputs.package_run_id }}
-      VERSION: ${{ inputs.version }}
-      GH_TAG: v${{ inputs.version }}
       PACKAGE_ROOT: ${{ runner.temp }}/llp-package
     steps:
       - name: Checkout workflow scripts
@@ -38,6 +31,13 @@ jobs:
           ref: ${{ github.sha }}
           path: .workflow-scripts
           persist-credentials: false
+
+      - name: Parse workflow context
+        id: context
+        shell: bash
+        env:
+          CONTEXT: ${{ inputs.context }}
+        run: bash .workflow-scripts/.github/scripts/common/parse-context.sh required:package_run_id required:version
       - name: Validate inputs
         shell: bash
         run: bash .workflow-scripts/.github/scripts/release/validate-inputs.sh
@@ -46,7 +46,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
-          run-id: ${{ inputs.package_run_id }}
+          run-id: ${{ steps.context.outputs.package_run_id }}
           pattern: llp-package-*
           path: ${{ runner.temp }}/llp-package
           merge-multiple: true

@@ -3,8 +3,8 @@ name: Package LLP macOS installer
 on:
   workflow_dispatch:
     inputs:
-      notarize_run_id:
-        description: "Successful Notarize Workflow Run ID containing the stapled LLP.app artifact"
+      context:
+        description: "JSON context for this release task"
         required: true
         type: string
 
@@ -17,7 +17,6 @@ jobs:
     name: Verify and package notarized app
     runs-on: macos-15
     env:
-      NOTARIZE_RUN_ID: ${{ inputs.notarize_run_id }}
       INPUT_DIR: ${{ runner.temp }}/llp-notarized-input
       OUTPUT_DIR: ${{ runner.temp }}/llp-package-output
     steps:
@@ -27,6 +26,13 @@ jobs:
           ref: ${{ github.sha }}
           path: .workflow-scripts
           persist-credentials: false
+
+      - name: Parse workflow context
+        id: context
+        shell: bash
+        env:
+          CONTEXT: ${{ inputs.context }}
+        run: bash .workflow-scripts/.github/scripts/common/parse-context.sh required:notarize_run_id
       - name: Validate Run ID
         shell: bash
         run: bash .workflow-scripts/.github/scripts/package/validate-run-id.sh
@@ -35,7 +41,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
-          run-id: ${{ inputs.notarize_run_id }}
+          run-id: ${{ steps.context.outputs.notarize_run_id }}
           pattern: llp-notarized-*
           path: ${{ runner.temp }}/llp-notarized-input
           merge-multiple: true

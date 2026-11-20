@@ -3,13 +3,9 @@ name: Test LLP macOS app
 on:
   workflow_dispatch:
     inputs:
-      commit_sha:
-        description: "Full source commit SHA (defaults to the selected workflow ref)"
-        required: false
-        type: string
-      version:
-        description: "Application/API version (defaults to mac/api-version)"
-        required: false
+      context:
+        description: "JSON context for this release task"
+        required: true
         type: string
 
 permissions:
@@ -26,11 +22,18 @@ jobs:
           ref: ${{ github.sha }}
           path: .workflow-scripts
           persist-credentials: false
+
+      - name: Parse workflow context
+        id: context
+        shell: bash
+        env:
+          CONTEXT: ${{ inputs.context }}
+        run: bash .workflow-scripts/.github/scripts/common/parse-context.sh optional:commit_sha optional:version
       - name: Resolve source commit
         id: source
         shell: bash
         env:
-          INPUT_SHA: ${{ inputs.commit_sha }}
+          INPUT_SHA: ${{ steps.context.outputs.commit_sha }}
         run: bash .workflow-scripts/.github/scripts/test/resolve-source-commit.sh
       - name: Checkout requested commit
         uses: actions/checkout@v4
@@ -43,7 +46,7 @@ jobs:
         shell: bash
         env:
           EXPECTED_SHA: ${{ steps.source.outputs.sha }}
-          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_VERSION: ${{ steps.context.outputs.version }}
         run: bash .workflow-scripts/.github/scripts/test/verify-checkout-and-record-version.sh
       - name: Discover test configuration and run tests
         id: tests

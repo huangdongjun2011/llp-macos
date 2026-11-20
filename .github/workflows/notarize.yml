@@ -3,8 +3,8 @@ name: Notarize LLP macOS app
 on:
   workflow_dispatch:
     inputs:
-      sign_run_id:
-        description: "Successful Sign Workflow Run ID containing the signed LLP app artifact"
+      context:
+        description: "JSON context for this release task"
         required: true
         type: string
 
@@ -17,7 +17,6 @@ jobs:
     name: Notarize and staple signed app
     runs-on: macos-15
     env:
-      SIGN_RUN_ID: ${{ inputs.sign_run_id }}
       WORK_DIR: ${{ runner.temp }}/llp-notarize-${{ github.run_id }}
       API_KEY_FILE: ${{ runner.temp }}/appstore-connect-key-${{ github.run_id }}.p8
       ARTIFACT_DIR: ${{ runner.temp }}/notarized-artifact
@@ -28,6 +27,13 @@ jobs:
           ref: ${{ github.sha }}
           path: .workflow-scripts
           persist-credentials: false
+
+      - name: Parse workflow context
+        id: context
+        shell: bash
+        env:
+          CONTEXT: ${{ inputs.context }}
+        run: bash .workflow-scripts/.github/scripts/common/parse-context.sh required:sign_run_id
       - name: Validate input and App Store Connect credentials
         shell: bash
         env:
@@ -40,7 +46,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
-          run-id: ${{ inputs.sign_run_id }}
+          run-id: ${{ steps.context.outputs.sign_run_id }}
           pattern: llp-signed-*
           path: ${{ runner.temp }}/signed-artifacts
           merge-multiple: true
