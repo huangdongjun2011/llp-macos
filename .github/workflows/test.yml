@@ -14,7 +14,7 @@ permissions:
 jobs:
   test:
     name: Run macOS unit tests
-    runs-on: macos-15
+    runs-on: self-hosted
     steps:
       - name: Checkout workflow scripts
         uses: actions/checkout@v4

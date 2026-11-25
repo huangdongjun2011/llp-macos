@@ -15,7 +15,7 @@ permissions:
 jobs:
   sign:
     name: Sign Developer ID archive
-    runs-on: macos-15
+    runs-on: self-hosted
     env:
       TEMP_KEYCHAIN: ${{ runner.temp }}/llp-signing-${{ github.run_id }}.keychain-db
       CERTIFICATE_FILE: ${{ runner.temp }}/developer-id-${{ github.run_id }}.p12

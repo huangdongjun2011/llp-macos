@@ -15,7 +15,7 @@ permissions:
 jobs:
   verify:
     name: Verify published Release assets
-    runs-on: macos-15
+    runs-on: self-hosted
     env:
       PACKAGE_DIR: ${{ runner.temp }}/llp-verify-package
       RELEASE_DIR: ${{ runner.temp }}/llp-release-assets

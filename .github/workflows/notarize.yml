@@ -15,7 +15,7 @@ permissions:
 jobs:
   notarize:
     name: Notarize and staple signed app
-    runs-on: macos-15
+    runs-on: self-hosted
     env:
       WORK_DIR: ${{ runner.temp }}/llp-notarize-${{ github.run_id }}
       API_KEY_FILE: ${{ runner.temp }}/appstore-connect-key-${{ github.run_id }}.p8
