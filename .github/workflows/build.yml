@@ -39,6 +39,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.source.outputs.sha }}
+          path: source
           persist-credentials: false
 
       - name: Resolve version and build number
@@ -47,13 +48,13 @@ jobs:
         env:
           INPUT_VERSION: ${{ steps.context.outputs.version }}
           SOURCE_SHA: ${{ steps.source.outputs.sha }}
-        run: bash .workflow-scripts/.github/scripts/build/resolve-version-and-build-number.sh
+        run: cd source && bash .github/scripts/build/resolve-version-and-build-number.sh
       - name: Build Release configuration
         shell: bash
         env:
           VERSION: ${{ steps.metadata.outputs.version }}
           BUILD_NUMBER: ${{ steps.metadata.outputs.build_number }}
-        run: bash .workflow-scripts/.github/scripts/build/build-release-configuration.sh
+        run: cd source && bash .github/scripts/build/build-release-configuration.sh
       - name: Save build metadata
         shell: bash
         env:
@@ -61,11 +62,11 @@ jobs:
           VERSION: ${{ steps.metadata.outputs.version }}
           BUILD_NUMBER: ${{ steps.metadata.outputs.build_number }}
           ARTIFACT_NAME: ${{ steps.metadata.outputs.artifact_name }}
-        run: bash .workflow-scripts/.github/scripts/build/save-build-metadata.sh
+        run: cd source && bash .github/scripts/build/save-build-metadata.sh
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.metadata.outputs.artifact_name }}
-          path: artifact/
+          path: source/artifact/
           if-no-files-found: error
           retention-days: 30

@@ -39,6 +39,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.source.outputs.sha }}
+          path: source
           persist-credentials: false
 
       - name: Verify checkout and record version
@@ -47,21 +48,21 @@ jobs:
         env:
           EXPECTED_SHA: ${{ steps.source.outputs.sha }}
           INPUT_VERSION: ${{ steps.context.outputs.version }}
-        run: bash .workflow-scripts/.github/scripts/test/verify-checkout-and-record-version.sh
+        run: cd source && bash ../.workflow-scripts/.github/scripts/test/verify-checkout-and-record-version.sh
       - name: Discover test configuration and run tests
         id: tests
         shell: bash
         env:
           SOURCE_SHA: ${{ steps.metadata.outputs.sha }}
           VERSION: ${{ steps.metadata.outputs.version }}
-        run: bash .workflow-scripts/.github/scripts/test/discover-test-configuration-and-run-tests.sh
+        run: cd source && bash ../.workflow-scripts/.github/scripts/test/discover-test-configuration-and-run-tests.sh
       - name: Write test metadata
         if: always() && steps.metadata.outcome == 'success'
         shell: bash
         env:
           SOURCE_SHA: ${{ steps.metadata.outputs.sha }}
           VERSION: ${{ steps.metadata.outputs.version }}
-        run: bash .workflow-scripts/.github/scripts/test/write-test-metadata.sh
+        run: cd source && bash ../.workflow-scripts/.github/scripts/test/write-test-metadata.sh
       - name: Upload Xcode test results
         if: always()
         uses: actions/upload-artifact@v4
