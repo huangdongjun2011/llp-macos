@@ -36,7 +36,7 @@ elif [[ -f mac/Package.swift ]]; then
   result_bundle="$result_dir/LLP-${SOURCE_SHA}-${GITHUB_RUN_ID}.xcresult"
   echo "No Xcode project/workspace found; using Xcode's Swift package scheme LLP and its unit test target."
   set +e
-  xcodebuild -packagePath mac -scheme LLP -destination 'platform=macOS' -resultBundlePath "$result_bundle" test 2>&1 | tee "$result_dir/xcodebuild-test.log"
+  xcodebuild -package-path mac -scheme LLP -destination 'platform=macOS' -resultBundlePath "$result_bundle" test 2>&1 | tee "$result_dir/xcodebuild-test.log"
   status=${PIPESTATUS[0]}
   set -e
   (( status == 0 )) || fail "Xcode Swift package tests failed for scheme 'LLP' (exit $status). See xcodebuild-test.log and the .xcresult artifact."

@@ -14,13 +14,13 @@ permissions:
 jobs:
   test:
     name: Run macOS unit tests
-    runs-on: self-hosted
+    runs-on: [self-hosted, macOS, ARM64]
+
     steps:
-      - name: Checkout workflow scripts
+      - name: Checkout requested commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
-          path: .workflow-scripts
+          ref: ${{ fromJSON(inputs.context).commit_sha || github.sha }}
           persist-credentials: false
 
       - name: Parse workflow context
@@ -28,41 +28,38 @@ jobs:
         shell: bash
         env:
           CONTEXT: ${{ inputs.context }}
-        run: bash .workflow-scripts/.github/scripts/common/parse-context.sh optional:commit_sha optional:version
-      - name: Resolve source commit
-        id: source
-        shell: bash
-        env:
-          INPUT_SHA: ${{ steps.context.outputs.commit_sha }}
-        run: bash .workflow-scripts/.github/scripts/test/resolve-source-commit.sh
-      - name: Checkout requested commit
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ steps.source.outputs.sha }}
-          path: source
-          persist-credentials: false
+        run: |
+          bash .github/scripts/common/parse-context.sh \
+            optional:commit_sha \
+            optional:version
 
       - name: Verify checkout and record version
         id: metadata
         shell: bash
         env:
-          EXPECTED_SHA: ${{ steps.source.outputs.sha }}
+          EXPECTED_SHA: ${{ steps.context.outputs.commit_sha || github.sha }}
           INPUT_VERSION: ${{ steps.context.outputs.version }}
-        run: cd source && bash ../.workflow-scripts/.github/scripts/test/verify-checkout-and-record-version.sh
+        run: |
+          bash .github/scripts/test/verify-checkout-and-record-version.sh
+
       - name: Discover test configuration and run tests
         id: tests
         shell: bash
         env:
           SOURCE_SHA: ${{ steps.metadata.outputs.sha }}
           VERSION: ${{ steps.metadata.outputs.version }}
-        run: cd source && bash ../.workflow-scripts/.github/scripts/test/discover-test-configuration-and-run-tests.sh
+        run: |
+          bash .github/scripts/test/discover-test-configuration-and-run-tests.sh
+
       - name: Write test metadata
         if: always() && steps.metadata.outcome == 'success'
         shell: bash
         env:
           SOURCE_SHA: ${{ steps.metadata.outputs.sha }}
           VERSION: ${{ steps.metadata.outputs.version }}
-        run: cd source && bash ../.workflow-scripts/.github/scripts/test/write-test-metadata.sh
+        run: |
+          bash .github/scripts/test/write-test-metadata.sh
+
       - name: Upload Xcode test results
         if: always()
         uses: actions/upload-artifact@v4
